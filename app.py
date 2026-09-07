@@ -5,7 +5,7 @@ import requests
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
-BOT_TOKEN = os.environ.get("f9LHodD0cOLhLxIlbnaconuLVcqQD3gMi0Ocx9b4fgDqEmIJdzd9slHXlCaMBQjmhmQrOztl0xhOg6lRsIGa")
+BOT_TOKEN = os.environ.get("f9LHodD0cOJfjaB0P9RQ4Aoq2pyZvxav3zgeGk_SfOx8aAxBkZ0HHhkSQaaXjQ7zXouJdInNM5yEDPUHKNel")
 BASE_URL = "https://api.max.ru/v1/bots"
 
 
