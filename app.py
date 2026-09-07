@@ -2,12 +2,12 @@ import os
 import time
 import threading
 from flask import Flask, request, jsonify
-from maxbot_api_client_python import MaxBot  # или Bot
+from maxbot_api_client_python import MaxBotApi  #
 
 app = Flask(__name__)
 
 # Токен бота
-BOT_TOKEN = os.environ.get("MAX_BOT_TOKEN")
+BOT_TOKEN = os.environ.get("f9LHodD0cOLhLxIlbnaconuLVcqQD3gMi0Ocx9b4fgDqEmIJdzd9slHXlCaMBQjmhmQrOztl0xhOg6lRsIGa")
 
 # Инициализация клиента
 bot = MaxBotApi(BOT_TOKEN)
