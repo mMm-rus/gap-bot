@@ -2,7 +2,7 @@ import os
 import time
 import threading
 from flask import Flask, request, jsonify
-from maxbot_api_client_python import MaxBotApi  # если есть библиотека
+from maxbot_api_client_python import MaxBot  # или Bot
 
 app = Flask(__name__)
 
