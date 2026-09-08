@@ -1,6 +1,6 @@
 import os
 import requests
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
@@ -58,6 +58,16 @@ def test_max():
             "error": str(e)
         }), 500
 
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.get_json(silent=True)
+
+    print("MAX WEBHOOK:", data)
+
+    return jsonify({
+        "ok": True
+    }), 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
