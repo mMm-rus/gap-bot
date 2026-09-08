@@ -153,6 +153,13 @@ def webhook():
 
     sender_id = message.get("sender", {}).get("user_id")
     chat_type = message.get("recipient", {}).get("chat_type")
+    recipient_user_id = message.get("recipient", {}).get("user_id")
+
+    if sender_id and recipient_user_id and sender_id == recipient_user_id:
+        print("MAX WEBHOOK: ignoring own message", flush=True)
+        return jsonify({
+            "ok": True
+        }), 200
 
     if text and sender_id and chat_type == "dialog":
         if text.strip() == "1":
