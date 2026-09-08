@@ -146,6 +146,13 @@ def webhook():
         }), 200
 
     message = data.get("message", {})
+    sender = message.get("sender", {})
+
+    if sender.get("is_bot") is True:
+        print("MAX WEBHOOK: ignoring bot message", flush=True)
+        return jsonify({
+            "ok": True
+        }), 200
     body = message.get("body", {})
     text = body.get("text")
 
