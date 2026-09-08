@@ -152,16 +152,21 @@ def webhook():
 
     chat_id = message.get("recipient", {}).get("chat_id")
 
-    if text and chat_id:
+    sender_id = message.get("sender", {}).get("user_id")
+    chat_type = message.get("recipient", {}).get("chat_type")
+
+    if text and sender_id and chat_type == "dialog":
         response = requests.post(
             f"{BASE_URL}/messages",
+            params={
+                "user_id": sender_id
+            },
             headers={
                 **HEADERS,
                 "Content-Type": "application/json"
             },
             json={
-                "text": f"Получил: {text}",
-                "chat_id": chat_id
+                "text": f"Получил: {text}"
             },
             timeout=10,
             verify=CA_BUNDLE
@@ -173,10 +178,6 @@ def webhook():
             response.text,
             flush=True
         )
-
-    return jsonify({
-        "ok": True
-    }), 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
