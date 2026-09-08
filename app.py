@@ -112,12 +112,14 @@ def setup_webhook():
         }
 
         response = requests.post(
-            f"{BASE_URL}/subscriptions",
+            f"{BASE_URL}/messages?user_id={message.get('sender', {}).get('user_id')}",
             headers={
                 **HEADERS,
                 "Content-Type": "application/json"
             },
-            json=payload,
+            json={
+                "text": f"Получил: {text}"
+            },
             timeout=10,
             verify=CA_BUNDLE
         )
