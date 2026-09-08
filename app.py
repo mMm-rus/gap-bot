@@ -1,6 +1,7 @@
 import os
 import requests
 from flask import Flask, jsonify, request
+from google_schedule import get_availability
 
 app = Flask(__name__)
 
@@ -154,6 +155,11 @@ def webhook():
     chat_type = message.get("recipient", {}).get("chat_type")
 
     if text and sender_id and chat_type == "dialog":
+        if text.strip() == "1":
+            reply = get_availability("сегодня")
+        else:
+            reply = f"Получил: {text}"
+
         response = requests.post(
             f"{BASE_URL}/messages",
             params={
@@ -164,7 +170,7 @@ def webhook():
                 "Content-Type": "application/json"
             },
             json={
-                "text": f"Получил: {text}"
+                "text": reply
             },
             timeout=10,
             verify=CA_BUNDLE
