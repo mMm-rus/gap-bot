@@ -18,6 +18,8 @@ CA_BUNDLE = os.path.join(
     "mincit-ca-bundle.pem"
 )
 
+PROCESSED_MESSAGE_IDS = set()
+
 
 @app.route("/")
 def home():
@@ -59,6 +61,7 @@ def test_max():
             "error": str(e)
         }), 500
 
+
 @app.route("/test-subscriptions")
 def test_subscriptions():
     if not BOT_TOKEN:
@@ -85,6 +88,7 @@ def test_subscriptions():
             "ok": False,
             "error": str(e)
         }), 500
+
 
 @app.route("/setup-webhook")
 def setup_webhook():
@@ -134,6 +138,7 @@ def setup_webhook():
             "error": str(e)
         }), 500
 
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(silent=True)
@@ -149,24 +154,30 @@ def webhook():
     sender = message.get("sender", {})
 
     if sender.get("is_bot") is True:
-        print("MAX WEBHOOK: ignoring bot message", flush=True)
+        print(
+            "MAX WEBHOOK: ignoring bot message",
+            flush=True
+        )
         return jsonify({
             "ok": True
         }), 200
+
     body = message.get("body", {})
     text = body.get("text")
+    mid = body.get("mid")
 
-    chat_id = message.get("recipient", {}).get("chat_id")
-
-    sender_id = message.get("sender", {}).get("user_id")
-    chat_type = message.get("recipient", {}).get("chat_type")
-    recipient_user_id = message.get("recipient", {}).get("user_id")
-
-    if sender_id and recipient_user_id and sender_id == recipient_user_id:
-        print("MAX WEBHOOK: ignoring own message", flush=True)
+    if mid and mid in PROCESSED_MESSAGE_IDS:
+        print(
+            "MAX WEBHOOK: ignoring duplicate message",
+            mid,
+            flush=True
+        )
         return jsonify({
             "ok": True
         }), 200
+
+    sender_id = sender.get("user_id")
+    chat_type = message.get("recipient", {}).get("chat_type")
 
     if text and sender_id and chat_type == "dialog":
         if text.strip() == "1":
@@ -197,9 +208,13 @@ def webhook():
             flush=True
         )
 
+        if response.status_code == 200 and mid:
+            PROCESSED_MESSAGE_IDS.add(mid)
+
     return jsonify({
         "ok": True
     }), 200
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
