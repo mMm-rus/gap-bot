@@ -58,6 +58,32 @@ def test_max():
             "error": str(e)
         }), 500
 
+@app.route("/test-subscriptions")
+def test_subscriptions():
+    if not BOT_TOKEN:
+        return jsonify({
+            "ok": False,
+            "error": "MAX_BOT_TOKEN is not configured"
+        }), 500
+
+    try:
+        response = requests.get(
+            f"{BASE_URL}/subscriptions",
+            headers=HEADERS,
+            timeout=10,
+            verify=CA_BUNDLE
+        )
+
+        return jsonify({
+            "http_status": response.status_code,
+            "response": response.json()
+        }), response.status_code
+
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": str(e)
+        }), 500
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
