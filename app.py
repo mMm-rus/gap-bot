@@ -85,6 +85,54 @@ def test_subscriptions():
             "error": str(e)
         }), 500
 
+@app.route("/setup-webhook")
+def setup_webhook():
+    if not BOT_TOKEN:
+        return jsonify({
+            "ok": False,
+            "error": "MAX_BOT_TOKEN is not configured"
+        }), 500
+
+    try:
+        webhook_secret = os.environ.get("WEBHOOK_SECRET")
+
+        if not webhook_secret:
+            return jsonify({
+                "ok": False,
+                "error": "WEBHOOK_SECRET is not configured"
+            }), 500
+
+        payload = {
+            "url": "https://gap-bot-dunb.onrender.com/webhook",
+            "update_types": [
+                "message_created",
+                "bot_started"
+            ],
+            "secret": webhook_secret
+        }
+
+        response = requests.post(
+            f"{BASE_URL}/subscriptions",
+            headers={
+                **HEADERS,
+                "Content-Type": "application/json"
+            },
+            json=payload,
+            timeout=10,
+            verify=CA_BUNDLE
+        )
+
+        return jsonify({
+            "http_status": response.status_code,
+            "response": response.json()
+        }), response.status_code
+
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": str(e)
+        }), 500
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(silent=True)
