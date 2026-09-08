@@ -139,6 +139,39 @@ def webhook():
 
     print("MAX WEBHOOK:", data, flush=True)
 
+    if not data:
+        return jsonify({
+            "ok": True
+        }), 200
+
+    message = data.get("message", {})
+    body = message.get("body", {})
+    text = body.get("text")
+
+    chat_id = message.get("recipient", {}).get("chat_id")
+
+    if text and chat_id:
+        response = requests.post(
+            f"{BASE_URL}/messages",
+            headers={
+                **HEADERS,
+                "Content-Type": "application/json"
+            },
+            json={
+                "text": f"Получил: {text}",
+                "chat_id": chat_id
+            },
+            timeout=10,
+            verify=CA_BUNDLE
+        )
+
+        print(
+            "MAX SEND:",
+            response.status_code,
+            response.text,
+            flush=True
+        )
+
     return jsonify({
         "ok": True
     }), 200
