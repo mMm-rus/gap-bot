@@ -1,7 +1,7 @@
 import os
 import requests
 from flask import Flask, jsonify, request
-from google_schedule import get_availability
+from google_schedule import get_availability, get_shift_summary
 
 app = Flask(__name__)
 
@@ -182,6 +182,10 @@ def webhook():
     if text and sender_id and chat_type == "dialog":
         if text.strip() == "1":
             reply = get_availability("сегодня")
+
+        elif text.strip() == "2":
+            reply = get_shift_summary()
+
         else:
             reply = f"Получил: {text}"
 
