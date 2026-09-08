@@ -421,7 +421,7 @@ def calculate_availability(target_date):
 
         text = (
             f"{target_date.strftime('%d.%m.%Y')} — "
-            f"заказы недоступны."
+            f"приём заявок недоступен."
         )
 
     else:
@@ -436,7 +436,7 @@ def calculate_availability(target_date):
 
         text = (
             f"{target_date.strftime('%d.%m.%Y')} — "
-            f"заказы доступны: "
+            f"приём заявок: "
             f"{interval_text}."
         )
 
@@ -518,3 +518,186 @@ def get_availability(day="сегодня"):
     )
 
     return result["text"]
+
+def get_shift_name(target_date):
+    """
+    Возвращает короткое название режима работы
+    на указанную дату.
+    """
+
+    settings = get_settings()
+
+    cycle_day = get_cycle_day(
+        target_date,
+        settings
+    )
+
+    schedule = get_schedule_row(cycle_day)
+
+    if not schedule:
+        return "❓ неизвестный режим"
+
+    schedule_type = schedule.get(
+        "Тип",
+        ""
+    ).strip()
+
+    start_time = parse_time(
+        schedule.get("Время начала", "")
+    )
+
+    end_time = parse_time(
+        schedule.get("Время окончания", "")
+    )
+
+    if schedule_type == "ВЫХОДНОЙ":
+        return "🏠 выходной"
+
+    if schedule_type == "ОТДЫХ_ПОСЛЕ_СМЕНЫ":
+        return "😴 отсыпной"
+
+    if schedule_type == "СМЕНА":
+        if start_time == time(8, 0) and end_time == time(20, 0):
+            return "☀️ в день"
+
+        if start_time == time(20, 0) and end_time == time(8, 0):
+            return "🌙 в ночь"
+
+    return "❓ неизвестный режим"
+
+def get_shift_summary():
+    """
+    Возвращает режим работы на сегодня,
+    завтра и послезавтра.
+    """
+
+    settings = get_settings()
+
+    timezone_name = settings.get(
+        "Часовой пояс",
+        "Europe/Amsterdam"
+    )
+
+    tz = ZoneInfo(timezone_name)
+
+    today = datetime.now(tz).date()
+
+    tomorrow = today + timedelta(days=1)
+    day_after = today + timedelta(days=2)
+
+    return (
+        f"Сегодня — {get_shift_name(today)}\n"
+        f"Завтра — {get_shift_name(tomorrow)}\n"
+        f"Послезавтра — {get_shift_name(day_after)}"
+    )
+
+def get_next_availability():
+    """
+    Возвращает ближайшее окно
+    для приёма заявок.
+    """
+
+    settings = get_settings()
+
+    timezone_name = settings.get(
+        "Часовой пояс",
+        "Europe/Amsterdam"
+    )
+
+    tz = ZoneInfo(timezone_name)
+
+    today = datetime.now(tz).date()
+
+    for offset in range(0, 31):
+
+        target_date = (
+            today +
+            timedelta(days=offset)
+        )
+
+        result = calculate_availability(
+            target_date
+        )
+
+        intervals = result.get(
+            "intervals",
+            []
+        )
+
+        if not intervals:
+            continue
+
+        date_text = target_date.strftime(
+            "%d.%m.%Y"
+        )
+
+        first_start, first_end = intervals[0]
+
+        if offset == 0:
+
+            return (
+                f"Сегодня — "
+                f"{first_start.strftime('%H:%M')}-"
+                f"{first_end.strftime('%H:%M')}"
+            )
+
+        if offset == 1:
+
+            return (
+                f"Завтра — "
+                f"{first_start.strftime('%H:%M')}-"
+                f"{first_end.strftime('%H:%M')}"
+            )
+
+        return (
+            f"{date_text} — "
+            f"{first_start.strftime('%H:%M')}-"
+            f"{first_end.strftime('%H:%M')}"
+        )
+
+    return (
+        "В ближайшие 30 дней нет "
+        "времени для приёма заявок."
+    )
+
+def get_today_request_status():
+    """
+    Возвращает ответ для заказчика:
+    можно ли принять заявку сегодня.
+    """
+
+    settings = get_settings()
+
+    timezone_name = settings.get(
+        "Часовой пояс",
+        "Europe/Amsterdam"
+    )
+
+    tz = ZoneInfo(timezone_name)
+
+    today = datetime.now(tz).date()
+
+    result = calculate_availability(
+        today
+    )
+
+    if not result["available"]:
+        return (
+            "Прости, мы сейчас не можем принять "
+            "вашу заявку.\n"
+            "Нажмите 2, чтобы узнать ближайшее "
+            "время приёма заявок."
+        )
+
+    interval_text = ", ".join(
+        (
+            f"{start.strftime('%H:%M')}-"
+            f"{end.strftime('%H:%M')}"
+        )
+        for start, end in result["intervals"]
+    )
+
+    return (
+        f"Сегодня можем принять заявку: "
+        f"{interval_text}."
+    )
