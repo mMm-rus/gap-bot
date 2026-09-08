@@ -11,6 +11,12 @@ HEADERS = {
     "Authorization": BOT_TOKEN
 }
 
+CA_BUNDLE = os.path.join(
+    os.path.dirname(__file__),
+    "certs",
+    "mincit-ca-bundle.pem"
+)
+
 
 @app.route("/")
 def home():
@@ -37,7 +43,8 @@ def test_max():
         response = requests.get(
             f"{BASE_URL}/me",
             headers=HEADERS,
-            timeout=10
+            timeout=10,
+            verify=CA_BUNDLE
         )
 
         return jsonify({
