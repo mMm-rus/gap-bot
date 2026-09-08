@@ -137,7 +137,7 @@ def setup_webhook():
 def webhook():
     data = request.get_json(silent=True)
 
-    print("MAX WEBHOOK:", data)
+    print("MAX WEBHOOK:", data, flush=True)
 
     return jsonify({
         "ok": True
