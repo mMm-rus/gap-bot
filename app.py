@@ -115,6 +115,7 @@ def setup_webhook():
             "url": "https://gap-bot-dunb.onrender.com/webhook",
             "update_types": [
                 "message_created",
+                "message_callback",
                 "bot_started"
             ],
             "secret": webhook_secret
@@ -143,6 +144,92 @@ def setup_webhook():
         }), 500
 
 
+def send_message(user_id, text, attachments=None):
+    payload = {
+        "text": text
+    }
+
+    if attachments:
+        payload["attachments"] = attachments
+
+    response = requests.post(
+        f"{BASE_URL}/messages",
+        params={
+            "user_id": user_id
+        },
+        headers={
+            **HEADERS,
+            "Content-Type": "application/json"
+        },
+        json=payload,
+        timeout=10,
+        verify=CA_BUNDLE
+    )
+
+    print(
+        "MAX SEND:",
+        response.status_code,
+        response.text,
+        flush=True
+    )
+
+    return response
+
+
+def send_main_menu(user_id):
+    attachments = [
+        {
+            "type": "inline_keyboard",
+            "payload": {
+                "buttons": [
+                    [
+                        {
+                            "type": "callback",
+                            "text": "Заявка на производство",
+                            "payload": "production_request"
+                        }
+                    ]
+                ]
+            }
+        }
+    ]
+
+    return send_message(
+        user_id,
+        "Выберите действие:",
+        attachments
+    )
+
+
+def answer_callback(callback_id, text):
+    response = requests.post(
+        f"{BASE_URL}/answers",
+        params={
+            "callback_id": callback_id
+        },
+        headers={
+            **HEADERS,
+            "Content-Type": "application/json"
+        },
+        json={
+            "message": {
+                "text": text
+            }
+        },
+        timeout=10,
+        verify=CA_BUNDLE
+    )
+
+    print(
+        "MAX CALLBACK ANSWER:",
+        response.status_code,
+        response.text,
+        flush=True
+    )
+
+    return response
+
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(silent=True)
@@ -153,6 +240,44 @@ def webhook():
         return jsonify({
             "ok": True
         }), 200
+
+    # ========================================================
+    # Нажатие inline-кнопки
+    # ========================================================
+
+    update_type = data.get("update_type")
+
+    if update_type == "message_callback":
+        callback = data.get("callback", {})
+        callback_id = callback.get("callback_id")
+        callback_payload = callback.get("payload")
+
+        print(
+            "MAX CALLBACK:",
+            callback_id,
+            callback_payload,
+            flush=True
+        )
+
+        if callback_id:
+            if callback_payload == "production_request":
+                answer_callback(
+                    callback_id,
+                    "Заявка на производство: кнопка получена."
+                )
+            else:
+                answer_callback(
+                    callback_id,
+                    "Кнопка получена."
+                )
+
+        return jsonify({
+            "ok": True
+        }), 200
+
+    # ========================================================
+    # Обычные сообщения
+    # ========================================================
 
     message = data.get("message", {})
     sender = message.get("sender", {})
@@ -197,27 +322,9 @@ def webhook():
         else:
             reply = f"Получил: {text}"
 
-        response = requests.post(
-            f"{BASE_URL}/messages",
-            params={
-                "user_id": sender_id
-            },
-            headers={
-                **HEADERS,
-                "Content-Type": "application/json"
-            },
-            json={
-                "text": reply
-            },
-            timeout=10,
-            verify=CA_BUNDLE
-        )
-
-        print(
-            "MAX SEND:",
-            response.status_code,
-            response.text,
-            flush=True
+        response = send_message(
+            sender_id,
+            reply
         )
 
         if response.status_code == 200 and mid:
@@ -231,3 +338,4 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
