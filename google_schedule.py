@@ -2,8 +2,9 @@ import csv
 import io
 import requests
 from datetime import datetime, time, timedelta
-from typing import List, Tuple
 from zoneinfo import ZoneInfo
+
+from availability import calculate_availability as availability_calculate
 
 
 # ============================================================
@@ -176,43 +177,6 @@ def get_events(target_date):
 
 
 # ============================================================
-# Вычитание блокирующих интервалов
-# ============================================================
-
-def subtract_interval(
-    base_start,
-    base_end,
-    block_start,
-    block_end
-):
-    if block_end <= base_start:
-        return [(base_start, base_end)]
-
-    if block_start >= base_end:
-        return [(base_start, base_end)]
-
-    result = []
-
-    if block_start > base_start:
-        result.append(
-            (
-                base_start,
-                min(block_start, base_end)
-            )
-        )
-
-    if block_end < base_end:
-        result.append(
-            (
-                max(block_end, base_start),
-                base_end
-            )
-        )
-
-    return result
-
-
-# ============================================================
 # Расчёт доступности
 # ============================================================
 
@@ -224,7 +188,9 @@ def calculate_availability(target_date):
         settings
     )
 
-    schedule = get_schedule_row(cycle_day)
+    schedule = get_schedule_row(
+        cycle_day
+    )
 
     if not schedule:
         return {
@@ -232,245 +198,27 @@ def calculate_availability(target_date):
             "cycle_day": cycle_day,
             "schedule_type": None,
             "available": False,
-            "available_start": None,
-            "available_end": None,
+            "first_available_start": None,
+            "last_available_end": None,
             "events": [],
             "intervals": [],
-            "text": "Не найден день цикла."
+            "text": (
+                f"{target_date.strftime('%d.%m.%Y')}: "
+                "не удалось определить расписание."
+            ),
         }
 
-    schedule_type = schedule.get(
-        "Тип",
-        ""
-    ).strip()
-
-    blocks_orders = schedule.get(
-        "Блокирует заказы?",
-        ""
-    ).strip().upper()
-
-    # --------------------------------------------------------
-    # Рабочее окно
-    # --------------------------------------------------------
-
-    work_start = parse_time(
-        settings.get(
-            "начало рабочего окна",
-            "09:00"
-        )
+    events = get_events(
+        target_date
     )
 
-    work_end = parse_time(
-        settings.get(
-            "конец рабочего окна",
-            "20:00"
-        )
+    return availability_calculate(
+        target_date,
+        settings,
+        schedule,
+        events,
+        cycle_day
     )
-
-    if work_start is None or work_end is None:
-        return {
-            "date": target_date,
-            "cycle_day": cycle_day,
-            "schedule_type": schedule_type,
-            "available": False,
-            "available_start": None,
-            "available_end": None,
-            "events": [],
-            "intervals": [],
-            "text": "Ошибка настроек рабочего окна."
-        }
-
-    # --------------------------------------------------------
-    # Базовая доступность
-    # --------------------------------------------------------
-
-    if schedule_type == "СМЕНА":
-
-        if blocks_orders == "ДА":
-            # Дневная смена.
-            # Заказы в этот день не принимаются.
-            base_intervals = []
-
-        else:
-            # Ночная смена.
-            # Заказы принимаются 09:00–18:00.
-            # 18:00–20:00 — подготовка к смене.
-            base_intervals = [
-                (
-                    work_start,
-                    time(18, 0)
-                )
-            ]
-
-    elif schedule_type == "ОТДЫХ_ПОСЛЕ_СМЕНЫ":
-
-        # После ночной смены отдых до 15:00.
-        base_intervals = [
-            (
-                time(15, 0),
-                work_end
-            )
-        ]
-
-    elif schedule_type == "ВЫХОДНОЙ":
-
-        # Свободный день.
-        base_intervals = [
-            (
-                work_start,
-                work_end
-            )
-        ]
-
-    else:
-
-        # Неизвестный тип дня.
-        base_intervals = []
-
-    # --------------------------------------------------------
-    # События
-    # --------------------------------------------------------
-
-    events = get_events(target_date)
-
-    blocking_intervals: List[Tuple[time, time, str]] = []
-    blocking_all_day = False
-
-    for event in events:
-
-        event_blocks = event.get(
-            "Блокирует заказы?",
-            ""
-        ).strip().upper()
-
-        if event_blocks != "ДА":
-            continue
-
-        event_start = parse_time(
-            event.get(
-                "Время начала",
-                ""
-            )
-        )
-
-        event_end = parse_time(
-            event.get(
-                "Время окончания",
-                ""
-            )
-        )
-
-        # Нет времени начала или окончания —
-        # считаем событие блокирующим весь день.
-        if event_start is None or event_end is None:
-            blocking_all_day = True
-            continue
-
-        # Некорректный интервал.
-        if event_end <= event_start:
-            continue
-
-        event_type = event.get(
-            "Тип",
-            ""
-        ).strip()
-
-        blocking_intervals.append(
-            (
-                event_start,
-                event_end,
-                event_type
-            )
-        )
-
-    # --------------------------------------------------------
-    # Событие на весь день
-    # --------------------------------------------------------
-
-    if blocking_all_day:
-        final_intervals = []
-
-    else:
-        final_intervals = list(base_intervals)
-
-        # Последовательно вычитаем каждое блокирующее событие.
-        for block_start, block_end, _event_type in blocking_intervals:
-
-            new_intervals = []
-
-            for interval_start, interval_end in final_intervals:
-
-                new_intervals.extend(
-                    subtract_interval(
-                        interval_start,
-                        interval_end,
-                        block_start,
-                        block_end
-                    )
-                )
-
-            final_intervals = new_intervals
-
-    # --------------------------------------------------------
-    # Итоговая доступность
-    # --------------------------------------------------------
-
-    available = len(final_intervals) > 0
-
-    if not available:
-
-        text = (
-            f"{target_date.strftime('%d.%m.%Y')} — "
-            f"приём заявок недоступен."
-        )
-
-    else:
-
-        interval_text = ", ".join(
-            (
-                f"{start.strftime('%H:%M')}-"
-                f"{end.strftime('%H:%M')}"
-            )
-            for start, end in final_intervals
-        )
-
-        text = (
-            f"{target_date.strftime('%d.%m.%Y')} — "
-            f"приём заявок: "
-            f"{interval_text}."
-        )
-
-    # --------------------------------------------------------
-    # Добавляем информацию о событиях
-    # --------------------------------------------------------
-
-    for start, end, event_type in blocking_intervals:
-
-        text += (
-            f" Событие {event_type}: "
-            f"{start.strftime('%H:%M')}-"
-            f"{end.strftime('%H:%M')}."
-        )
-
-    return {
-        "date": target_date,
-        "cycle_day": cycle_day,
-        "schedule_type": schedule_type,
-        "available": available,
-        "available_start": (
-            final_intervals[0][0]
-            if available
-            else None
-        ),
-        "available_end": (
-            final_intervals[-1][1]
-            if available
-            else None
-        ),
-        "events": events,
-        "intervals": final_intervals,
-        "text": text
-    }
 
 
 # ============================================================
@@ -485,7 +233,9 @@ def get_availability(day="сегодня"):
         "Europe/Amsterdam"
     )
 
-    tz = ZoneInfo(timezone_name)
+    tz = ZoneInfo(
+        timezone_name
+    )
 
     now = datetime.now(tz)
 
@@ -519,6 +269,11 @@ def get_availability(day="сегодня"):
 
     return result["text"]
 
+
+# ============================================================
+# Название режима работы
+# ============================================================
+
 def get_shift_name(target_date):
     """
     Возвращает короткое название режима работы
@@ -532,7 +287,9 @@ def get_shift_name(target_date):
         settings
     )
 
-    schedule = get_schedule_row(cycle_day)
+    schedule = get_schedule_row(
+        cycle_day
+    )
 
     if not schedule:
         return "❓ неизвестный режим"
@@ -543,11 +300,17 @@ def get_shift_name(target_date):
     ).strip()
 
     start_time = parse_time(
-        schedule.get("Время начала", "")
+        schedule.get(
+            "Время начала",
+            ""
+        )
     )
 
     end_time = parse_time(
-        schedule.get("Время окончания", "")
+        schedule.get(
+            "Время окончания",
+            ""
+        )
     )
 
     if schedule_type == "ВЫХОДНОЙ":
@@ -557,13 +320,25 @@ def get_shift_name(target_date):
         return "😴 отсыпной"
 
     if schedule_type == "СМЕНА":
-        if start_time == time(8, 0) and end_time == time(20, 0):
+
+        if (
+            start_time == time(8, 0)
+            and end_time == time(20, 0)
+        ):
             return "☀️ в день"
 
-        if start_time == time(20, 0) and end_time == time(8, 0):
+        if (
+            start_time == time(20, 0)
+            and end_time == time(8, 0)
+        ):
             return "🌙 в ночь"
 
     return "❓ неизвестный режим"
+
+
+# ============================================================
+# Сводка смен
+# ============================================================
 
 def get_shift_summary():
     """
@@ -578,7 +353,9 @@ def get_shift_summary():
         "Europe/Amsterdam"
     )
 
-    tz = ZoneInfo(timezone_name)
+    tz = ZoneInfo(
+        timezone_name
+    )
 
     today = datetime.now(tz).date()
 
@@ -590,6 +367,11 @@ def get_shift_summary():
         f"Завтра — {get_shift_name(tomorrow)}\n"
         f"Послезавтра — {get_shift_name(day_after)}"
     )
+
+
+# ============================================================
+# Ближайшая доступность
+# ============================================================
 
 def get_next_availability():
     """
@@ -604,7 +386,9 @@ def get_next_availability():
         "Europe/Amsterdam"
     )
 
-    tz = ZoneInfo(timezone_name)
+    tz = ZoneInfo(
+        timezone_name
+    )
 
     today = datetime.now(tz).date()
 
@@ -660,6 +444,11 @@ def get_next_availability():
         "времени для приёма заявок."
     )
 
+
+# ============================================================
+# Статус приёма заявки сегодня
+# ============================================================
+
 def get_today_request_status():
     """
     Возвращает ответ для заказчика:
@@ -673,7 +462,9 @@ def get_today_request_status():
         "Europe/Amsterdam"
     )
 
-    tz = ZoneInfo(timezone_name)
+    tz = ZoneInfo(
+        timezone_name
+    )
 
     today = datetime.now(tz).date()
 
